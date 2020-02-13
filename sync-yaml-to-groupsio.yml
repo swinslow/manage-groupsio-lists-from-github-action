@@ -1,0 +1,33 @@
+# vim: ts=2 sw=2 et
+
+name: Sync YAML file to Groups.io
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - MAINTAINERS.yml # Make sure this path matches $MEMBERSHIP_FILE, below
+
+jobs:
+  sync_groupsio:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.x
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.x' # Semantic version range syntax or exact version of a Python version
+        architecture: 'x64' # Optional - x64 or x86, defaults to x64
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install requests pyyaml
+    - name: Sync MEMBERSHIP_FILE against Groups.io subgroups
+      env:
+        GROUPSIO_USERNAME: ${{ secrets.GROUPSIO_USERNAME }}
+        GROUPSIO_PASSWORD: ${{ secrets.GROUPSIO_PASSWORD }}
+        GROUP_NAME: chipsalliance
+        LIST_SUFFIX: '-wg'
+        UNIFIED_LIST: 'all-maintainers'
+        MEMBERSHIP_FILE: 'MAINTAINERS.yml'
+      run: python .github/workflows/sync-yaml-to-groupsio.py

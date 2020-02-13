@@ -1,0 +1,13 @@
+# vim: ts=2 sw=2 et
+
+test:
+  - email: sampleEmail@sampleDomain.org
+  - email: anotherEmail@anotherDomain.org
+    name: A Real Name
+test2:
+  - email: sampleEmail@sampleDomain.org
+  - email: someoneElse@otherDomain.org
+    name: Someone Else
+    another-thing: You can add whatever other keys you want
+  - email: moreEmails@manyDomains.org
+
