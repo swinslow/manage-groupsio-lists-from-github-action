@@ -30,4 +30,5 @@ jobs:
         LIST_SUFFIX: '-wg'
         UNIFIED_LIST: 'all-maintainers'
         MEMBERSHIP_FILE: 'MAINTAINERS.yml'
+        MAIN_LIST: 'main'
       run: python .github/workflows/sync-yaml-to-groupsio.py

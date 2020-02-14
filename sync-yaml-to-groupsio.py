@@ -22,6 +22,13 @@ group_name=os.environ['GROUP_NAME']
 list_suffix = os.environ['LIST_SUFFIX']
 unified_list = os.environ['UNIFIED_LIST'] # Optional, leave blank to disable
 subgroup_membership_filename = os.environ['MEMBERSHIP_FILE']
+main_list = os.environ['MAIN_LIST'] # For most lists, the parent list is 'main'
+
+# Protect the main group.
+
+if unified_list == main_list:
+    print('ERROR: You cannot use %s as your unified list.' % main_list)
+    sys.exit()
 
 ### Set up regex patterns ###
 
@@ -54,7 +61,7 @@ while more_subgroups:
 
     if subgroups_page and 'data' in subgroups_page:
         for subgroup in subgroups_page['data']:
-            if subgroup['name'].endswith(list_suffix):
+            if subgroup['name'].endswith(list_suffix) and not subgroup['name'].endswith(unified_list):
                 groupsio_subgroups.add(subgroup['name'])
 
         next_page_token = subgroups_page['next_page_token']
@@ -76,45 +83,51 @@ all_local_valid_members = dict()
 with open (subgroup_membership_filename,'r') as subgroup_membership_file:
     local_subgroups_and_members = yaml.full_load(subgroup_membership_file)
 
+if not local_subgroups_and_members:
+    print('WARN: No lists defined. Exiting')
+    sys.exit()
+
 # Walk through definitions
 
 for local_subgroup, local_members in local_subgroups_and_members.items():
 
-    local_valid_members = dict()
+    # Protect main and the unified list
 
-    # Make sure the subgroup has members defined, otherwise move on
-
-    if not local_members:
+    if local_subgroup in [main_list,unified_list]:
+        print('INFO: You cannot modify %s. Ignoring.' % local_subgroup)
         continue
+
+    local_valid_members = dict()
 
     # Walk through the members and extract the valid entries.  Note that if no
     # local member definitions are found, any non-mod/non-admin group members
     # will be removed.  This is one way to clear a subgroup.
 
-    for local_member in local_members:
+    if local_members:
+        for local_member in local_members:
 
-        # Make sure an email entry exists before proceeding
+            # Make sure an email entry exists before proceeding
 
-        if not local_member['email']:
-            continue
+            if not local_member['email']:
+                continue
 
-        local_member_email = email_pattern.findall(local_member['email'])
+            local_member_email = email_pattern.findall(local_member['email'])
 
-        # Make sure an email was defined before proceeding
+            # Make sure an email was defined before proceeding
 
-        if not local_member_email:
-            continue
+            if not local_member_email:
+                continue
 
-        # Check if a name was defined (optional)
+            # Check if a name was defined (optional)
 
-        local_member_name = ''
+            local_member_name = ''
 
-        if 'name' in local_member and local_member['name']:
-            local_member_name = local_member['name'].strip()
+            if 'name' in local_member and local_member['name']:
+                local_member_name = local_member['name'].strip()
 
-        # Store the email with the name (if provided)
+            # Store the email with the name (if provided)
 
-        local_valid_members[local_member_email[0].lower()] = local_member_name
+            local_valid_members[local_member_email[0].lower()] = local_member_name
 
     # Only proceed if there's a matching subgroup at Groups.io
 
@@ -188,6 +201,11 @@ for local_subgroup, local_members in local_subgroups_and_members.items():
                     (group_name,calculated_subgroup_name.replace('+','%2B'),new_email.replace('+','%2B'),csrf),
                     cookies=cookie).json()
 
+            if add_members['object'] == 'error':
+                print('Something went wrong: %s | %s' %
+                        (calculated_subgroup_name, add_members['type']))
+                continue
+
         # Prune members which are not in the local file
 
         pruned_emails = '\n'.join(groupsio_members_to_remove).replace('+','%2B')
@@ -198,12 +216,18 @@ for local_subgroup, local_members in local_subgroups_and_members.items():
                     (calculated_subgroup_name.replace('+','%2B'),pruned_emails,csrf),
                     cookies=cookie).json()
 
+            if remove_members['object'] == 'error':
+                print('Something went wrong: %s | %s' %
+                        (calculated_subgroup_name, remove_members['type']))
+                continue
+
         # Add local members to meta list
 
         all_local_valid_members.update(local_valid_members)
 
-
 ### Manage the unified list, if defined ###
+
+permission_to_modify = True
 
 if unified_list:
 
@@ -224,6 +248,13 @@ if unified_list:
                 'https://groups.io/api/v1/getmembers?group_name=%s&limit=100&page_token=%s' %
                     (calculated_unified_name.replace('+','%2B'),next_page_token),
                 cookies=cookie).json()
+
+        if groupsio_unified_subgroup_members_page['object'] == 'error':
+            print('Something went wrong: %s | %s' %
+                    (calculated_unified_name, groupsio_unified_subgroup_members_page['type']))
+            permission_to_modify = False
+            more_members = False
+            continue
 
         if groupsio_unified_subgroup_members_page and 'data' in groupsio_unified_subgroup_members_page:
             for subgroup_member in groupsio_unified_subgroup_members_page['data']:
@@ -248,6 +279,9 @@ if unified_list:
 
     for new_member in local_members_to_add:
 
+        if not permission_to_modify:
+            continue
+
         new_email = new_member
 
         # Add a name if one was provided
@@ -260,6 +294,12 @@ if unified_list:
                 (group_name,calculated_unified_name.replace('+','%2B'),new_email.replace('+','%2B'),csrf),
                 cookies=cookie).json()
 
+        if add_members['object'] == 'error':
+            print('Something went wrong: %s | %s' %
+                    (calculated_subgroup_name, add_members['type']))
+            permission_to_modify = False
+            continue
+
     # Prune members which are not in the local file
 
     pruned_emails = '\n'.join(groupsio_members_to_remove).replace('+','%2B')
@@ -269,3 +309,6 @@ if unified_list:
             (calculated_unified_name.replace('+','%2B'),pruned_emails,csrf),
             cookies=cookie).json()
 
+    if remove_members['object'] == 'error':
+        print('Something went wrong: %s | %s' %
+                (calculated_unified_name, remove_members['type']))
