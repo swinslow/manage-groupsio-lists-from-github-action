@@ -57,7 +57,7 @@ while more_subgroups:
             if subgroup['name'].endswith(list_suffix):
                 groupsio_subgroups.add(subgroup['name'])
 
-    next_page_token = subgroups_page['next_page_token']
+        next_page_token = subgroups_page['next_page_token']
 
     if next_page_token == 0:
         more_subgroups = False
@@ -123,15 +123,13 @@ for local_subgroup, local_members in local_subgroups_and_members.items():
     if not calculated_subgroup_name in groupsio_subgroups:
         continue
 
-    # Add local members to meta list
-
-    all_local_valid_members.update(local_valid_members)
-
     # Add users who aren't moderators to the comparison list. Users who are mods
     # are added to a protected list.
 
     more_members = True
     next_page_token = 0
+
+    permission_to_modify = True
 
     groupsio_members = set()
     groupsio_mods = set()
@@ -143,50 +141,67 @@ for local_subgroup, local_members in local_subgroups_and_members.items():
                     (calculated_subgroup_name.replace('+','%2B'), next_page_token),
                 cookies=cookie).json()
 
+        if groupsio_subgroup_members_page['object'] == 'error':
+            print('Something went wrong: %s | %s' %
+                    (calculated_subgroup_name, groupsio_subgroup_members_page['type']))
+            more_members = False
+            permission_to_modify = False
+            continue
+
         if groupsio_subgroup_members_page and 'data' in groupsio_subgroup_members_page:
             for subgroup_member in groupsio_subgroup_members_page['data']:
                 if 'email' in subgroup_member:
-
 
                     if subgroup_member['mod_status'] == 'sub_modstatus_none':
                         groupsio_members.add(subgroup_member['email'].lower())
                     else:
                         groupsio_mods.add(subgroup_member['email'].lower())
 
-        next_page_token = groupsio_subgroup_members_page['next_page_token']
+            next_page_token = groupsio_subgroup_members_page['next_page_token']
 
         if next_page_token == 0:
             more_members = False
 
     # Calculate the differences between the local file and Groups.io
 
-    local_members_to_add = set(local_valid_members.keys()) - groupsio_members - groupsio_mods
-    groupsio_members_to_remove = groupsio_members - set(local_valid_members.keys())
+    local_members_to_add = set()
+    groupsio_members_to_remove = set()
 
-    # Add missing members to groups.io
+    if permission_to_modify:
 
-    for new_member in local_members_to_add:
+        local_members_to_add = set(local_valid_members.keys()) - groupsio_members - groupsio_mods
+        groupsio_members_to_remove = groupsio_members - set(local_valid_members.keys())
 
-        new_email = new_member
+        # Add missing members to groups.io
 
-        # Add a name if one was provided
+        for new_member in local_members_to_add:
 
-        if local_valid_members[new_member]:
-            new_email = '%s <%s>' % (local_valid_members[new_member], new_member)
+            new_email = new_member
 
-        add_members = session.post(
-                'https://groups.io/api/v1/directadd?group_name=%s&subgroupnames=%s&emails=%s&csrf=%s' %
-                (group_name,calculated_subgroup_name.replace('+','%2B'),new_email.replace('+','%2B'),csrf),
-                cookies=cookie).json()
+            # Add a name if one was provided
 
-    # Prune members which are not in the local file
+            if local_valid_members[new_member]:
+                new_email = '%s <%s>' % (local_valid_members[new_member], new_member)
 
-    pruned_emails = '\n'.join(groupsio_members_to_remove).replace('+','%2B')
+            add_members = session.post(
+                    'https://groups.io/api/v1/directadd?group_name=%s&subgroupnames=%s&emails=%s&csrf=%s' %
+                    (group_name,calculated_subgroup_name.replace('+','%2B'),new_email.replace('+','%2B'),csrf),
+                    cookies=cookie).json()
 
-    remove_members = session.post(
-            'https://groups.io/api/v1/bulkremovemembers?group_name=%s&emails=%s&csrf=%s' %
-            (calculated_subgroup_name.replace('+','%2B'),pruned_emails,csrf),
-            cookies=cookie).json()
+        # Prune members which are not in the local file
+
+        pruned_emails = '\n'.join(groupsio_members_to_remove).replace('+','%2B')
+
+        if pruned_emails:
+            remove_members = session.post(
+                    'https://groups.io/api/v1/bulkremovemembers?group_name=%s&emails=%s&csrf=%s' %
+                    (calculated_subgroup_name.replace('+','%2B'),pruned_emails,csrf),
+                    cookies=cookie).json()
+
+        # Add local members to meta list
+
+        all_local_valid_members.update(local_valid_members)
+
 
 ### Manage the unified list, if defined ###
 
@@ -219,7 +234,7 @@ if unified_list:
                     else:
                         groupsio_unified_mods.add(subgroup_member['email'].lower())
 
-        next_page_token = groupsio_unified_subgroup_members_page['next_page_token']
+            next_page_token = groupsio_unified_subgroup_members_page['next_page_token']
 
         if next_page_token == 0:
             more_members = False
