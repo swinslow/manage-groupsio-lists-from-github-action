@@ -39,26 +39,28 @@ cookie = session.cookies
 
 csrf = login['user']['csrf_token']
 
-# Get subgroups as JSON
-
-# TODO: Add support for >100 subgroups
-
-all_subgroups = session.post(
-        'https://groups.io/api/v1/getsubgroups?group_name=%s&limit=100' %
-            group_name.replace('+','%2B'),
-        cookies=cookie).json()
-
-groupsio_subgroups = set()
-
 # Find all subgroups which match the list suffix, this restricts modification to
 # a certain namespace of lists (e.g., can't modify membership of sensitive lists)
 
-if all_subgroups and 'data' in all_subgroups:
-    for subgroup in all_subgroups['data']:
-        if 'name' in subgroup:
-            if subgroup['name'].endswith(list_suffix):
+more_subgroups = True
+next_page_token = 0
+groupsio_subgroups = set()
 
+while more_subgroups:
+    subgroups_page = session.post(
+            'https://groups.io/api/v1/getsubgroups?group_name=%s&limit=100&page_token=%s' %
+                (group_name.replace('+','%2B'), next_page_token),
+            cookies=cookie).json()
+
+    if subgroups_page and 'data' in subgroups_page:
+        for subgroup in subgroups_page['data']:
+            if subgroup['name'].endswith(list_suffix):
                 groupsio_subgroups.add(subgroup['name'])
+
+    next_page_token = subgroups_page['next_page_token']
+
+    if next_page_token == 0:
+        more_subgroups = False
 
 # Bail out if there aren't any matching subgroups in the group
 
@@ -125,29 +127,36 @@ for local_subgroup, local_members in local_subgroups_and_members.items():
 
     all_local_valid_members.update(local_valid_members)
 
-    # Get the members of the group
+    # Add users who aren't moderators to the comparison list. Users who are mods
+    # are added to a protected list.
 
-    # TODO: Support for >100 members
-
-    groupsio_subgroup_members = session.post(
-            'https://groups.io/api/v1/getmembers?group_name=%s&limit=100' %
-                calculated_subgroup_name.replace('+','%2B'),
-            cookies=cookie).json()
+    more_members = True
+    next_page_token = 0
 
     groupsio_members = set()
     groupsio_mods = set()
 
-    if groupsio_subgroup_members and 'data' in groupsio_subgroup_members:
-        for subgroup_member in groupsio_subgroup_members['data']:
-            if 'email' in subgroup_member:
+    while more_members:
 
-                # Add users who aren't moderators to the comparison list. Users
-                # who are mods are added to a protected list.
+        groupsio_subgroup_members_page = session.post(
+                'https://groups.io/api/v1/getmembers?group_name=%s&limit=100&page_token=%s' %
+                    (calculated_subgroup_name.replace('+','%2B'), next_page_token),
+                cookies=cookie).json()
 
-                if subgroup_member['mod_status'] == 'sub_modstatus_none':
-                    groupsio_members.add(subgroup_member['email'].lower())
-                else:
-                    groupsio_mods.add(subgroup_member['email'].lower())
+        if groupsio_subgroup_members_page and 'data' in groupsio_subgroup_members_page:
+            for subgroup_member in groupsio_subgroup_members_page['data']:
+                if 'email' in subgroup_member:
+
+
+                    if subgroup_member['mod_status'] == 'sub_modstatus_none':
+                        groupsio_members.add(subgroup_member['email'].lower())
+                    else:
+                        groupsio_mods.add(subgroup_member['email'].lower())
+
+        next_page_token = groupsio_subgroup_members_page['next_page_token']
+
+        if next_page_token == 0:
+            more_members = False
 
     # Calculate the differences between the local file and Groups.io
 
@@ -185,27 +194,35 @@ if unified_list:
 
     calculated_unified_name = '%s+%s' % (group_name,unified_list)
 
-    #TODO: Support for >100 members
+    # Add users who aren't moderators to the comparison list. Users who are mods
+    # are added to a protected list.
 
-    groupsio_unified_subgroup_members = session.post(
-            'https://groups.io/api/v1/getmembers?group_name=%s&limit=100' %
-                calculated_unified_name.replace('+','%2B'),
-            cookies=cookie).json()
+    more_members = True
+    next_page_token = 0
 
     groupsio_unified_members = set()
     groupsio_unified_mods = set()
 
-    if groupsio_unified_subgroup_members and 'data' in groupsio_unified_subgroup_members:
-        for subgroup_member in groupsio_unified_subgroup_members['data']:
-            if 'email' in subgroup_member:
+    while more_members:
 
-                # Add users who aren't moderators to the comparison list. Users
-                # who are mods are added to a protected list.
+        groupsio_unified_subgroup_members_page = session.post(
+                'https://groups.io/api/v1/getmembers?group_name=%s&limit=100&page_token=%s' %
+                    (calculated_unified_name.replace('+','%2B'),next_page_token),
+                cookies=cookie).json()
 
-                if subgroup_member['mod_status'] == 'sub_modstatus_none':
-                    groupsio_unified_members.add(subgroup_member['email'].lower())
-                else:
-                    groupsio_unified_mods.add(subgroup_member['email'].lower())
+        if groupsio_unified_subgroup_members_page and 'data' in groupsio_unified_subgroup_members_page:
+            for subgroup_member in groupsio_unified_subgroup_members_page['data']:
+                if 'email' in subgroup_member:
+
+                    if subgroup_member['mod_status'] == 'sub_modstatus_none':
+                        groupsio_unified_members.add(subgroup_member['email'].lower())
+                    else:
+                        groupsio_unified_mods.add(subgroup_member['email'].lower())
+
+        next_page_token = groupsio_unified_subgroup_members_page['next_page_token']
+
+        if next_page_token == 0:
+            more_members = False
 
     # Calculate the differences between the local file and Groups.io
 
