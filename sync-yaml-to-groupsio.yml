@@ -24,11 +24,11 @@ jobs:
         pip install requests pyyaml
     - name: Sync MEMBERSHIP_FILE against Groups.io subgroups
       env:
-        GROUPSIO_USERNAME: ${{ secrets.GROUPSIO_USERNAME }}
-        GROUPSIO_PASSWORD: ${{ secrets.GROUPSIO_PASSWORD }}
-        GROUP_NAME: chipsalliance
-        LIST_SUFFIX: '-wg'
-        UNIFIED_LIST: 'all-maintainers'
-        MEMBERSHIP_FILE: 'MAINTAINERS.yml'
-        MAIN_LIST: 'main'
+        GROUPSIO_USERNAME: ${{ secrets.GROUPSIO_USERNAME }} # Set this up as defined in README.md
+        GROUPSIO_PASSWORD: ${{ secrets.GROUPSIO_PASSWORD }} # Set this up as defined in README.md
+        GROUP_NAME: yourgroupname # Find this as explained in README.md
+        LIST_SUFFIX: '' # Optional, allows you to add a suffix to managed subgroups to keep organized
+        UNIFIED_LIST: 'all-members' # Optional, adds all members to this meta list. Leave blank to disable.
+        MEMBERSHIP_FILE: 'SAMPLE.yml' # Set this up as defined in README.md
+        MAIN_LIST: 'main' # You probably don't need to change this, unless you used a custom main list name.
       run: python .github/workflows/sync-yaml-to-groupsio.py
