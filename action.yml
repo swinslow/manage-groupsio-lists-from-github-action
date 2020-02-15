@@ -1,6 +1,12 @@
 # vim: ts=2 sw=2 et
 
-name: Sync YAML file to Groups.io
+name: Manage Groups.io membership via YAML file
+description: 'Use a YAML file in a repo to manage Groups.io subgroup membership'
+author: 'Brian Warner (brianwarner)'
+branding:
+  icon: upload-cloud
+  color: blue
+
 on:
   push:
     branches:
